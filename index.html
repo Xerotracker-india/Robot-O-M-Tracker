@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Robot O&M Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f4f6;--card:#fff;--ink:#14232e;--mute:#5d6b76;--line:#dde2e6;--red:#d62828;--redbg:#fde8e8;--amb:#e69b00;--ambbg:#fff3d6;--grn:#23895a;--grnbg:#e0f3e9;--pri:#1d4e6b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root:not([data-theme="light"]){}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1a22;--card:#17262f;--ink:#e8eef2;--mute:#97a8b3;--line:#294050;--redbg:#3b1d1d;--ambbg:#3a2f12;--grnbg:#16352a;--pri:#6fb0d6}}
+:root[data-theme="dark"]{--bg:#0f1a22;--card:#17262f;--ink:#e8eef2;--mute:#97a8b3;--line:#294050;--redbg:#3b1d1d;--ambbg:#3a2f12;--grnbg:#16352a;--pri:#6fb0d6}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Hind,system-ui,sans-serif;font-size:16px;line-height:1.45}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--pri);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;z-index:5}
+header b{font-size:18px}header small{opacity:.85;display:block;font-size:12px}
+.bell{background:var(--red);color:#fff;border:0;border-radius:20px;padding:6px 12px;font:700 14px Hind,sans-serif}
+nav{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:calc(52px + env(safe-area-inset-top,0px));z-index:4}
+nav button{flex:1;padding:13px 4px;border:0;background:none;color:var(--mute);font:500 15px Hind,sans-serif;border-bottom:3px solid transparent}
+nav button.on{color:var(--pri);border-color:var(--pri);font-weight:700}
+main{max-width:760px;margin:0 auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--grn);border-radius:8px;padding:12px;margin-bottom:10px}
+.card.red{border-left-color:var(--red)}.card.amb{border-left-color:var(--amb)}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.t{font-weight:700}.m{color:var(--mute);font-size:14px}
+.pill{display:inline-block;border-radius:12px;padding:2px 10px;font-size:13px;font-weight:700;margin:4px 4px 0 0}
+.pr{background:var(--redbg);color:var(--red)}.pa{background:var(--ambbg);color:#9a6400}.pg{background:var(--grnbg);color:var(--grn)}.pb{background:var(--line);color:var(--ink)}
+.big{font-size:30px;font-weight:700;line-height:1}
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.kpi div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+.kpi .r{background:var(--redbg);border-color:var(--red)}.kpi .r .big{color:var(--red)}
+button.act{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:12px 16px;font:700 16px Hind,sans-serif;width:100%}
+button.sm{background:none;border:1px solid var(--pri);color:var(--pri);border-radius:6px;padding:6px 10px;font:500 14px Hind,sans-serif;margin:8px 6px 0 0}
+label{display:block;font-weight:500;margin:12px 0 4px}
+select,input,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font:16px Hind,sans-serif;background:var(--card);color:var(--ink)}
+.seg{display:flex;gap:8px}.seg button{flex:1;padding:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;font:700 15px Hind,sans-serif}.seg button.on{border-color:var(--pri);background:var(--pri);color:#fff}
+h3{margin:18px 0 8px;font-size:17px}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden;margin:4px 0 10px}.bar i{display:block;height:100%;background:var(--red)}
+.steps{display:flex;gap:3px;margin-top:8px}.steps i{flex:1;height:6px;border-radius:3px;background:var(--line)}.steps i.d{background:var(--grn)}.steps i.c{background:var(--amb)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;z-index:9}
+.modal>div{background:var(--card);width:100%;max-width:760px;max-height:92%;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
+.hide{display:none}
+</style></head><body>
+<header><div><b>Robot O&M Tracker</b><small id="who"></small></div><button class="bell" id="bell" onclick="go('master')"></button></header>
+<nav id="nav"></nav>
+<main id="main"></main>
+<div id="modal" class="modal hide"><div id="mbox"></div></div>
+<script>
+const D=[{"n":"Hanagal","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[8,0]}},{"n":"KH Halli","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[6,0]}},{"n":"Banavikal","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[6,0]}},{"n":"Ilkal","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[21,0],"Airtouch":[6,0]}},{"n":"Chalisgaon","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[7,0]}},{"n":"Satara 27MW","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[8,0]}},{"n":"Satara 72MW","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[28,0]}},{"n":"Kanpur","reg":"Uttar Pradesh","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[2,0]}},{"n":"Bhadla-100MW","reg":"Rajasthan","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[22,0],"Airtouch":[14,0]}},{"n":"Pavagada-1","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[30,0]}},{"n":"Pavagada-2","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[20,0]}},{"n":"Pavagada-3","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[10,0],"Airtouch":[24,0],"Unikav":[0,121]}},{"n":"Badaun","reg":"Uttar Pradesh","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[18,120]}},{"n":"Surendranagar","reg":"Gujarat","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[92,566]}},{"n":"Khamgaon","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[66,33]}},{"n":"Buldhana","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[54,61]}},{"n":"Sirsa","reg":"Haryana","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[25,65]}},{"n":"Bikaner-350","reg":"Rajasthan","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[167,677]}},{"n":"Bikaner-300","reg":"Rajasthan","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[198,481]}},{"n":"Bikaner-240","reg":"Rajasthan","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[278,186]}},{"n":"Yadgir","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[19,96]}},{"n":"Pangaon","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[38,130],"Airtouch":[13,57]}},{"n":"Dhamangaon","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[114,146],"Airtouch":[34,62]}},{"n":"Trichy","reg":"Tamil Nadu","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[22,90]}},{"n":"Bhadla-02","reg":"Rajasthan","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[68,357],"Airtouch":[46,264]}},{"n":"Yavatmal","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[118,83]}},{"n":"Agar","reg":"Madhya Pradesh","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[7,265],"Unikav":[160,59]}},{"n":"Banda","reg":"Uttar Pradesh","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[54,106]}},{"n":"Banka","reg":"Bihar","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[85,0]}},{"n":"Soyegaon","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[36,54],"Unikav":[52,79]}},{"n":"KMF Nandini","reg":"Karnataka","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[0,85],"Unikav":[65,15]}},{"n":"GUVNL 280MW","reg":"Gujarat","spoc":"(hidden in demo)","ph":"","o":{"Solabot":[211,138],"Airtouch":[0,252]}},{"n":"Badnu","reg":"Rajasthan","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[190,231]}},{"n":"Lakadia SECI III","reg":"Gujarat","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[50,44]}},{"n":"Talegaon","reg":"Maharashtra","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[24,36]}},{"n":"DVC 300MW","reg":"Gujarat","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[84,172],"Unikav":[182,193]}},{"n":"MSKVY Pune","reg":"MSKVY (Maharashtra)","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[95,0]}},{"n":"MSKVY Nashik","reg":"MSKVY (Maharashtra)","spoc":"(hidden in demo)","ph":"","o":{"Unikav":[49,0]}},{"n":"MSKVY Ahmednagar","reg":"MSKVY (Maharashtra)","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[82,0]}},{"n":"MSKVY Sangli","reg":"MSKVY (Maharashtra)","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[39,0]}},{"n":"MSKVY Yavatmal","reg":"MSKVY (Maharashtra)","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[45,0],"Unikav":[53,0]}},{"n":"MSKVY SPV6 Nashik","reg":"MSKVY (Maharashtra)","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[32,0]}},{"n":"SECI Rampar","reg":"Gujarat","spoc":"(hidden in demo)","ph":"","o":{"Taypro":[104,195]}}];
+const OEMS=["Solabot","Unikav","Taypro","Airtouch"];
+const CATS={FAR:["Battery","Track / wheel","Brush","Charging station","Communication","Other"],LS:["Shifting vehicle","Mechanism","Battery","Brush","Other"]};
+const STAGES=["Part identify","Approval","Dispatch","Delivery","Installed"];
+const S={};D.forEach(s=>S[s.n]=s);
+const REGS=[...new Set(D.map(s=>s.reg))];
+const tot=s=>Object.values(s.o).reduce((a,v)=>a+v[0]+v[1],0);
+const ALL=D.reduce((a,s)=>a+tot(s),0);
+let T=[],P=[],OFF=false;
+let me=null,tab="issues",nid=107,fr="",ft={site:null,oem:null,type:"FAR"};
+try{me=JSON.parse(localStorage.getItem("me"))}catch(e){}
+const $=id=>document.getElementById(id);
+const sev=t=>t.days>=30||(t.days>=7&&t.ball=="Vendor")?"red":t.days>=7?"amb":"";
+const alerts=()=>({tk:T.filter(t=>t.days>=7&&t.ball=="Vendor"),down:T.filter(t=>t.days>=30),sp:P.filter(p=>p.stage==3&&p.since>=10)});
+const siteOpts=sel=>REGS.map(r=>`<optgroup label="${r}">${D.filter(s=>s.reg==r).map(s=>`<option ${s.n==sel?"selected":""}>${s.n}</option>`).join("")}</optgroup>`).join("");
+function go(t){tab=t;render()}
+function render(){
+ if(!me){ask();return}
+ $("who").textContent=me.name+" · "+me.site;
+ const a=alerts(),n=new Set([...a.tk,...a.down].map(t=>t.id)).size+a.sp.length;
+ $("bell").textContent=OFF?"⚠ offline":"🔴 "+n+" alert";
+ $("nav").innerHTML=[["issues","Issues"],["spares","Spares"],["sites","Sites"],["master","Master"]].map(([k,l])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')">${l}</button>`).join("");
+ $("main").innerHTML={issues,spares,sites,master}[tab]();
+}
+function ask(){
+ $("modal").classList.remove("hide");
+ $("mbox").innerHTML=`<h3 style="margin-top:0">Who are you?</h3><div class="m">Select once, your phone will remember it.</div>
+ <label>Name</label><input id="nm" placeholder="Your name"><label>Site</label><select id="st"><option>Client (HQ)</option>${siteOpts("")}</select>
+ <div style="height:14px"></div><button class="act" onclick="saveMe()">Get started</button>`}
+function saveMe(){const n=$("nm").value.trim();if(!n){$("nm").focus();return}
+ me={name:n,site:$("st").value};try{localStorage.setItem("me",JSON.stringify(me))}catch(e){}
+ $("modal").classList.add("hide");render()}
+function issues(){
+ const L=T.filter(t=>!fr||S[t.site].reg==fr).sort((a,b)=>b.days-a.days);
+ return `<button class="act" onclick="raise()">+ Raise new issue</button>
+ <label>Region</label><select onchange="fr=this.value;render()"><option value="">All regions</option>${REGS.map(r=>`<option ${r==fr?"selected":""}>${r}</option>`).join("")}</select>
+ <h3>Open issues (${L.length})</h3>`+L.map(t=>`<div class="card ${sev(t)}"><div class="row"><div><div class="t">#${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat}</div></div><div style="text-align:right"><div class="big" style="font-size:24px;color:${sev(t)=="red"?"var(--red)":"inherit"}">${t.days}d</div><div class="m">open</div></div></div>
+ <span class="pill pb">${t.robots} robots</span><span class="pill ${t.ball=="Vendor"?"pr":"pa"}">Pending: ${t.ball}</span><span class="pill pb">By ${(t.by||"").split(" (")[0]}</span>${t.note?`<div class="m" style="margin-top:6px">${t.note}</div>`:""}
+ <button class="sm" onclick="flip(${t.id})">${t.ball=="Vendor"?"Send back to Site":"Send to Vendor"}</button><button class="sm" onclick="closeT(${t.id})">Confirm fix</button><button class="sm" onclick="reqPart(${t.id})">Request spare part</button></div>`).join("")}
+async function flip(id){const t=T.find(x=>x.id==id);await act(()=>DB.upd("tickets",id,{ball:t.ball=="Vendor"?"Site":"Vendor"}))}
+async function closeT(id){if(confirm("Fix verified at site? The ticket will be closed."))await act(()=>DB.upd("tickets",id,{status:"closed"}))}
+function raise(){
+ if(!S[ft.site])ft.site=S[me.site]?me.site:D[0].n;
+ const o=S[ft.site].o;if(!o[ft.oem])ft.oem=Object.keys(o)[0];
+ const c=o[ft.oem],av={LS:c[0],FAR:c[1]};if(!av[ft.type])ft.type=av.FAR?"FAR":"LS";
+ $("modal").classList.remove("hide");
+ $("mbox").innerHTML=`<h3 style="margin-top:0">New issue</h3>
+ <label>Site</label><select onchange="ft.site=this.value;raise()">${siteOpts(ft.site)}</select>
+ <label>OEM (at this site)</label><select onchange="ft.oem=this.value;raise()">${Object.keys(o).map(k=>`<option ${k==ft.oem?"selected":""}>${k}</option>`).join("")}</select>
+ <label>Robot type</label><div class="seg">${[["FAR","FAR (Fully Auto)"],["LS","L&S (Lift & Shift)"]].map(([k,l])=>`<button style="${av[k]?"":"opacity:.35"}" class="${ft.type==k?"on":""}" onclick="${av[k]?`ft.type='${k}';raise()`:""}">${l}<br><small>${av[k]} robots</small></button>`).join("")}</div>
+ <label>What is the issue?</label><select id="fc">${CATS[ft.type].map(c=>`<option>${c}</option>`).join("")}</select>
+ <label>How many robots affected? (max ${av[ft.type]})</label><input id="fr" type="number" min="1" max="${av[ft.type]}" value="1" inputmode="numeric">
+ ${ft.site.startsWith("MSKVY")?`<label>Village / sub-site</label><input id="fv" placeholder="e.g. Palaskhel">`:""}
+ <label>Photo</label><input type="file" accept="image/*" capture="environment">
+ <label>Detail (optional)</label><textarea id="fn" rows="2" placeholder="Block / row / what you see"></textarea>
+ <div style="height:14px"></div><button class="act" onclick="sub()">Submit issue</button><button class="sm" style="width:100%;margin:8px 0 0" onclick="$('modal').classList.add('hide')">Cancel</button>`}
+async function sub(){const mx=S[ft.site].o[ft.oem][ft.type=="FAR"?1:0];
+ const o={site:ft.site,oem:ft.oem,type:ft.type,cat:$("fc").value,robots:Math.min(mx,Math.max(1,+$("fr").value||1)),vil:$("fv")?$("fv").value:"",note:$("fn").value,ball:"Vendor",status:"open",raised_by:me.name+" ("+me.site+")",created:Date.now()};
+ $("modal").classList.add("hide");tab="issues";await act(()=>DB.add("tickets",o))}
+function spares(){
+ return `<h3 style="margin-top:0">Spare part pipeline</h3>`+P.map(p=>{const late=p.stage==3&&p.since>=10;
+ return `<div class="card ${late?"red":p.since>=14?"amb":""}"><div class="row"><div><div class="t">${p.part} × ${p.qty}</div><div class="m">${p.site} · ${p.oem} · Issue #${p.tid}</div></div><div class="m">${p.since}d in this stage</div></div>
+ <div class="steps">${STAGES.map((s,i)=>`<i class="${i<p.stage?"d":i==p.stage?"c":""}"></i>`).join("")}</div>
+ <div class="m" style="margin-top:4px">Now: <b>${STAGES[p.stage]}</b>${late?` <span class="pill pr">Not delivered ${p.since} days after dispatch</span>`:""}</div>
+ ${p.stage<4?`<button class="sm" onclick="adv(${p.id})">Next stage: ${STAGES[p.stage+1]}</button>`:""}</div>`}).join("")}
+async function adv(id){const p=P.find(x=>x.id==id);await act(()=>DB.upd("spares",id,{stage:p.stage+1,stage_at:Date.now()}))}
+function reqPart(tid){const t=T.find(x=>x.id==tid),n=prompt("Which part is needed?");if(!n)return;const q=+prompt("Quantity?","1")||1;act(()=>DB.add("spares",{tid,part:n,site:t.site,oem:t.oem,qty:q,stage:0,stage_at:Date.now()}))}
+function sites(){
+ return REGS.map(r=>`<h3>${r}</h3>`+D.filter(s=>s.reg==r).map(s=>{const n=T.filter(t=>t.site==s.n);
+ return `<div class="card ${n.some(t=>sev(t)=="red")?"red":n.length?"amb":""}"><div class="row"><div class="t">${s.n}</div><div><b>${tot(s)}</b> robots</div></div>
+ ${Object.entries(s.o).map(([k,v])=>`<span class="pill pb">${k}: ${v[0]?v[0]+" L&S":""}${v[0]&&v[1]?" + ":""}${v[1]?v[1]+" FAR":""}</span>`).join("")}
+ <div class="m" style="margin-top:6px">${s.spoc?`SPOC: ${s.spoc}${s.ph?` · <a href="tel:${s.ph}">Call</a>`:""}`:`<b style="color:var(--red)">No SPOC assigned</b>`}</div>
+ ${n.length?`<span class="pill pr">${n.length} open issue</span>`:""}</div>`}).join("")).join("")}
+function master(){
+ const a=alerts(),dn=T.reduce((s,t)=>s+t.robots,0),ns=D.filter(s=>!s.spoc).length;
+ const by=OEMS.map(o=>{const x=T.filter(t=>t.oem==o),i=D.reduce((s,z)=>s+(z.o[o]?z.o[o][0]+z.o[o][1]:0),0),r=x.reduce((s,t)=>s+t.robots,0);return{o,i,r,p:r/i*100,d:x.length?Math.round(x.reduce((s,t)=>s+t.days,0)/x.length):0}});
+ const mp=Math.max(1,...by.map(b=>b.p));
+ const rg=REGS.map(g=>{const x=T.filter(t=>S[t.site].reg==g);return{g,t:D.filter(s=>s.reg==g).reduce((s,z)=>s+tot(z),0),r:x.reduce((s,t)=>s+t.robots,0),n:x.length}}).filter(z=>z.n);
+ const old=T.filter(t=>t.days>=30).sort((a,b)=>b.days-a.days);
+ return `<div class="kpi"><div class="r"><div class="big">${a.tk.length}</div>With vendor 7+ days</div><div class="r"><div class="big">${a.down.length}</div>Down 30+ days</div><div><div class="big">${dn}</div>Robots down (${(dn/ALL*100).toFixed(1)}% of ${ALL})</div><div class="${a.sp.length?"r":""}"><div class="big">${a.sp.length}</div>Part not delivered (10d+)</div></div>
+ <h3>🔴 Oldest issues, act now</h3>`+(old.length?old.map(t=>`<div class="card red"><div class="row"><div><div class="t">${t.site} · ${t.oem}</div><div class="m">${t.robots} robots · ${t.cat}</div></div><div class="big" style="color:var(--red)">${t.days}d</div></div></div>`).join(""):`<div class="m">All clear ✔</div>`)+
+ `<h3>OEM comparison (down % of installed)</h3><div class="card" style="border-left-color:var(--pri)">${by.map(b=>`<div class="row"><b>${b.o}</b><span class="m">${b.r} / ${b.i} · ${b.p.toFixed(1)}% · avg ${b.d} days</span></div><div class="bar"><i style="width:${b.p/mp*100}%"></i></div>`).join("")}</div>
+ <h3>Region-wise</h3><div class="card" style="border-left-color:var(--pri)">${rg.map(z=>`<div class="row"><b>${z.g}</b><span class="m">${z.r} down / ${z.t} · ${z.n} issues</span></div><div class="bar"><i style="width:${Math.min(100,z.r/z.t*400)}%"></i></div>`).join("")}</div>
+ ${ns?`<div class="card amb"><b>${ns} sites have no SPOC</b><div class="m">See the Sites tab. Who will raise issues for these sites?</div></div>`:""}`}
+// ===== SUPABASE: paste your Project URL and anon/publishable key =====
+const SBU="https://yuwebkcuoxxsorgamnbo.supabase.co",SBK="sb_publishable_3B0imtC1-vkOar_28RFprQ_Iq-6qN7f";
+const sb=(p,o={})=>fetch(SBU+"/rest/v1/"+p,{...o,headers:{apikey:SBK,"Content-Type":"application/json",Prefer:"return=representation"}}).then(r=>r.ok?r.json():Promise.reject(r));
+const DB={load:async()=>({T:await sb("tickets?status=eq.open&order=created"),P:await sb("spares?order=id")}),
+ add:(t,o)=>sb(t,{method:"POST",body:JSON.stringify(o)}),upd:(t,id,p)=>sb(t+"?id=eq."+id,{method:"PATCH",body:JSON.stringify(p)})};
+const dd=x=>Math.floor((Date.now()-new Date(x))/864e5);
+async function act(f){try{await f();await refresh()}catch(e){alert("Could not save. Check internet and try again.")}}
+async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));OFF=false}catch(e){OFF=true}render()}
+render();refresh();setInterval(refresh,60000);
+</script></body></html>
