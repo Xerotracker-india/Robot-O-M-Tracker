@@ -52,7 +52,7 @@ const S={};D.forEach(s=>S[s.n]=s);
 const REGS=[...new Set(D.map(s=>s.reg))];
 const tot=s=>Object.values(s.o).reduce((a,v)=>a+v[0]+v[1],0);
 const ALL=D.reduce((a,s)=>a+tot(s),0);
-let T=[],P=[],OFF=false;
+let T=[],P=[],OFF=false,SP={};
 let me=null,tab="issues",nid=107,fr="",ft={site:null,oem:null,type:"FAR"};
 try{me=JSON.parse(localStorage.getItem("me"))}catch(e){}
 const $=id=>document.getElementById(id);
@@ -61,7 +61,7 @@ const alerts=()=>({tk:T.filter(t=>t.days>=7&&t.ball=="Vendor"),down:T.filter(t=>
 const siteOpts=sel=>REGS.map(r=>`<optgroup label="${r}">${D.filter(s=>s.reg==r).map(s=>`<option ${s.n==sel?"selected":""}>${s.n}</option>`).join("")}</optgroup>`).join("");
 function go(t){tab=t;render()}
 function render(){
- if(!me){ask();return}
+ if(!me||!me.code){ask();return}
  $("who").textContent=me.name+" · "+me.site;
  const a=alerts(),n=new Set([...a.tk,...a.down].map(t=>t.id)).size+a.sp.length;
  $("bell").textContent=OFF?"⚠ offline":"🔴 "+n+" alert";
@@ -71,11 +71,13 @@ function render(){
 function ask(){
  $("modal").classList.remove("hide");
  $("mbox").innerHTML=`<h3 style="margin-top:0">Who are you?</h3><div class="m">Select once, your phone will remember it.</div>
- <label>Name</label><input id="nm" placeholder="Your name"><label>Site</label><select id="st"><option>Client (HQ)</option>${siteOpts("")}</select>
+ <label>Name</label><input id="nm" placeholder="Your name"><label>Team code</label><input id="tc" type="password" placeholder="Ask your coordinator"><div class="m" id="tcerr" style="color:var(--red)"></div><label>Site</label><select id="st"><option>Client (HQ)</option>${siteOpts("")}</select>
  <div style="height:14px"></div><button class="act" onclick="saveMe()">Get started</button>`}
-function saveMe(){const n=$("nm").value.trim();if(!n){$("nm").focus();return}
- me={name:n,site:$("st").value};try{localStorage.setItem("me",JSON.stringify(me))}catch(e){}
- $("modal").classList.add("hide");render()}
+async function saveMe(){const n=$("nm").value.trim(),c=$("tc").value.trim();if(!n||!c){(n?$("tc"):$("nm")).focus();return}
+ me={name:n,site:$("st").value,code:c};
+ try{const r=await sb("config?select=ok");if(!r.length)throw 0}catch(e){me=null;$("tcerr").textContent="Wrong team code, or no internet.";return}
+ try{localStorage.setItem("me",JSON.stringify(me))}catch(e){}
+ $("modal").classList.add("hide");render();refresh()}
 function issues(){
  const L=T.filter(t=>!fr||S[t.site].reg==fr).sort((a,b)=>b.days-a.days);
  return `<button class="act" onclick="raise()">+ Raise new issue</button>
@@ -111,14 +113,15 @@ function spares(){
  ${p.stage<4?`<button class="sm" onclick="adv(${p.id})">Next stage: ${STAGES[p.stage+1]}</button>`:""}</div>`}).join("")}
 async function adv(id){const p=P.find(x=>x.id==id);await act(()=>DB.upd("spares",id,{stage:p.stage+1,stage_at:Date.now()}))}
 function reqPart(tid){const t=T.find(x=>x.id==tid),n=prompt("Which part is needed?");if(!n)return;const q=+prompt("Quantity?","1")||1;act(()=>DB.add("spares",{tid,part:n,site:t.site,oem:t.oem,qty:q,stage:0,stage_at:Date.now()}))}
+const spocHtml=n=>{const a=SP[n]||[];return `<div class="m" style="margin-top:6px">`+(a.length?a.map(x=>`${x.role=="Backup"?"Backup":"SPOC"}: ${x.name} · <a href="tel:${x.phone}">Call</a>`).join("<br>"):`<b style="color:var(--red)">No SPOC assigned</b>`)+`</div>`};
 function sites(){
  return REGS.map(r=>`<h3>${r}</h3>`+D.filter(s=>s.reg==r).map(s=>{const n=T.filter(t=>t.site==s.n);
  return `<div class="card ${n.some(t=>sev(t)=="red")?"red":n.length?"amb":""}"><div class="row"><div class="t">${s.n}</div><div><b>${tot(s)}</b> robots</div></div>
  ${Object.entries(s.o).map(([k,v])=>`<span class="pill pb">${k}: ${v[0]?v[0]+" L&S":""}${v[0]&&v[1]?" + ":""}${v[1]?v[1]+" FAR":""}</span>`).join("")}
- <div class="m" style="margin-top:6px">${s.spoc?`SPOC: ${s.spoc}${s.ph?` · <a href="tel:${s.ph}">Call</a>`:""}`:`<b style="color:var(--red)">No SPOC assigned</b>`}</div>
+ ${spocHtml(s.n)}
  ${n.length?`<span class="pill pr">${n.length} open issue</span>`:""}</div>`}).join("")).join("")}
 function master(){
- const a=alerts(),dn=T.reduce((s,t)=>s+t.robots,0),ns=D.filter(s=>!s.spoc).length;
+ const a=alerts(),dn=T.reduce((s,t)=>s+t.robots,0),ns=D.filter(s=>!(SP[s.n]||[]).length).length;
  const by=OEMS.map(o=>{const x=T.filter(t=>t.oem==o),i=D.reduce((s,z)=>s+(z.o[o]?z.o[o][0]+z.o[o][1]:0),0),r=x.reduce((s,t)=>s+t.robots,0);return{o,i,r,p:r/i*100,d:x.length?Math.round(x.reduce((s,t)=>s+t.days,0)/x.length):0}});
  const mp=Math.max(1,...by.map(b=>b.p));
  const rg=REGS.map(g=>{const x=T.filter(t=>S[t.site].reg==g);return{g,t:D.filter(s=>s.reg==g).reduce((s,z)=>s+tot(z),0),r:x.reduce((s,t)=>s+t.robots,0),n:x.length}}).filter(z=>z.n);
@@ -130,11 +133,11 @@ function master(){
  ${ns?`<div class="card amb"><b>${ns} sites have no SPOC</b><div class="m">See the Sites tab. Who will raise issues for these sites?</div></div>`:""}`}
 // ===== SUPABASE: paste your Project URL and anon/publishable key =====
 const SBU="https://yuwebkcuoxxsorgamnbo.supabase.co",SBK="sb_publishable_3B0imtC1-vkOar_28RFprQ_Iq-6qN7f";
-const sb=(p,o={})=>fetch(SBU+"/rest/v1/"+p,{...o,headers:{apikey:SBK,"Content-Type":"application/json",Prefer:"return=representation"}}).then(r=>r.ok?r.json():Promise.reject(r));
-const DB={load:async()=>({T:await sb("tickets?status=eq.open&order=created"),P:await sb("spares?order=id")}),
+const sb=(p,o={})=>fetch(SBU+"/rest/v1/"+p,{...o,headers:{apikey:SBK,"x-team-code":(me&&me.code)||"","Content-Type":"application/json",Prefer:"return=representation"}}).then(r=>r.ok?r.json():Promise.reject(r));
+const DB={load:async()=>({T:await sb("tickets?status=eq.open&order=created"),P:await sb("spares?order=id"),SP:await sb("spocs?order=id")}),
  add:(t,o)=>sb(t,{method:"POST",body:JSON.stringify(o)}),upd:(t,id,p)=>sb(t+"?id=eq."+id,{method:"PATCH",body:JSON.stringify(p)})};
 const dd=x=>Math.floor((Date.now()-new Date(x))/864e5);
 async function act(f){try{await f();await refresh()}catch(e){alert("Could not save. Check internet and try again.")}}
-async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));OFF=false}catch(e){OFF=true}render()}
+async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}render()}
 render();refresh();setInterval(refresh,60000);
 </script></body></html>
