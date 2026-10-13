@@ -52,12 +52,12 @@ const S={};D.forEach(s=>S[s.n]=s);
 const REGS=[...new Set(D.map(s=>s.reg))];
 const tot=s=>Object.values(s.o).reduce((a,v)=>a+v[0]+v[1],0);
 const ALL=D.reduce((a,s)=>a+tot(s),0);
-let T=[],P=[],OFF=false,SP={};
+let T=[],P=[],OFF=false,SP={},CT=[];
 let me=null,tab="issues",nid=107,fr="",ft={site:null,oem:null,type:"FAR"};
 try{me=JSON.parse(localStorage.getItem("me"))}catch(e){}
 const $=id=>document.getElementById(id);
-const sev=t=>t.days>=30||(t.days>=7&&t.ball=="Vendor")?"red":t.days>=7?"amb":"";
-const alerts=()=>({tk:T.filter(t=>t.days>=7&&t.ball=="Vendor"),down:T.filter(t=>t.days>=30),sp:P.filter(p=>p.stage==3&&p.since>=10)});
+const sev=t=>t.days>=30||(t.days>=7&&t.ball=="Vendor")||(mailDue(t)&&t.ml.length)?"red":t.days>=7||mailDue(t)?"amb":"";
+const alerts=()=>({tk:T.filter(t=>t.days>=7&&t.ball=="Vendor"),down:T.filter(t=>t.days>=30),sp:T.filter(mailDue)});
 const siteOpts=sel=>REGS.map(r=>`<optgroup label="${r}">${D.filter(s=>s.reg==r).map(s=>`<option ${s.n==sel?"selected":""}>${s.n}</option>`).join("")}</optgroup>`).join("");
 function go(t){tab=t;render()}
 function render(){
@@ -65,7 +65,7 @@ function render(){
  $("who").textContent=me.name+" · "+me.site;
  const a=alerts(),n=new Set([...a.tk,...a.down].map(t=>t.id)).size+a.sp.length;
  $("bell").textContent=OFF?"⚠ offline":"🔴 "+n+" alert";
- $("nav").innerHTML=[["issues","Issues"],["spares","Spares"],["sites","Sites"],["master","Master"]].map(([k,l])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')">${l}</button>`).join("");
+ $("nav").innerHTML=[["issues","Issues"],["sites","Sites"],["master","Master"]].map(([k,l])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')">${l}</button>`).join("");
  $("main").innerHTML={issues,spares,sites,master}[tab]();
 }
 function ask(){
@@ -82,11 +82,20 @@ function issues(){
  const L=T.filter(t=>!fr||S[t.site].reg==fr).sort((a,b)=>b.days-a.days);
  return `<button class="act" onclick="raise()">+ Raise new issue</button>
  <label>Region</label><select onchange="fr=this.value;render()"><option value="">All regions</option>${REGS.map(r=>`<option ${r==fr?"selected":""}>${r}</option>`).join("")}</select>
- <h3>Open issues (${L.length})</h3>`+L.map(t=>`<div class="card ${sev(t)}"><div class="row"><div><div class="t">#${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat}</div></div><div style="text-align:right"><div class="big" style="font-size:24px;color:${sev(t)=="red"?"var(--red)":"inherit"}">${t.days}d</div><div class="m">open</div></div></div>
- <span class="pill pb">${t.robots} robots</span><span class="pill ${t.ball=="Vendor"?"pr":"pa"}">Pending: ${t.ball}</span><span class="pill pb">By ${(t.by||"").split(" (")[0]}</span>${t.note?`<div class="m" style="margin-top:6px">${t.note}</div>`:""}
- <button class="sm" onclick="flip(${t.id})">${t.ball=="Vendor"?"Send back to Site":"Send to Vendor"}</button><button class="sm" onclick="closeT(${t.id})">Confirm fix</button><button class="sm" onclick="reqPart(${t.id})">Request spare part</button></div>`).join("")}
-async function flip(id){const t=T.find(x=>x.id==id);await act(()=>DB.upd("tickets",id,{ball:t.ball=="Vendor"?"Site":"Vendor"}))}
-async function closeT(id){if(confirm("Fix verified at site? The ticket will be closed."))await act(()=>DB.upd("tickets",id,{status:"closed"}))}
+ <h3>Open issues (${L.length})</h3>`+L.map(card).join("")}
+const fd=d=>new Date(+d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+function card(t){const n=t.ml.length,due=mailDue(t),nx=n==0?"Mail to vendor pending":n<4?`Reminder ${n} ${due?"due now":"in "+(7*n-t.days)+"d"}`:"All 3 reminders sent";
+ const done=["Vendor mailed","Reminder 1","Reminder 2","Reminder 3"].slice(0,n).map((x,i)=>`<span class="pill pg">✔ ${x} · ${fd(t.ml[i])}</span>`).join("");
+ return `<div class="card ${sev(t)}"><div class="row"><div><div class="t">T-${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat}</div></div><div style="text-align:right"><div class="big" style="font-size:24px;color:${sev(t)=="red"?"var(--red)":"inherit"}">${t.days}d</div><div class="m">open</div></div></div>
+ <span class="pill pb">${t.robots} robots</span><span class="pill pb">By ${(t.by||"").split(" (")[0]}</span>
+ <div style="margin-top:4px"><span class="pill pg">✔ Raised · ${fd(t.created)}</span>${done}<span class="pill ${due||n>=4?"pr":"pa"}">${nx}</span></div>
+ ${t.note?`<div class="m" style="margin-top:6px">${t.note}</div>`:""}
+ <textarea id="cn${t.id}" rows="2" style="margin-top:8px" placeholder="Site concern for vendor (goes in the next email)" onchange="saveC(${t.id},this.value)">${esc(t.concern)}</textarea>
+ ${n<4?`<button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button>`:""}<button class="sm" onclick="fixT(${t.id})">Fixed, close ticket</button></div>`}
+const esc=x=>String(x||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+function saveC(id,v){act(()=>DB.upd("tickets",id,{concern:v}))}
+function emailT(id){const t=T.find(x=>x.id==id);mailTo(t);setTimeout(()=>{if(confirm("Did you send the mail? OK = Yes, sent"))act(()=>DB.upd("tickets",id,{mail_log:JSON.stringify([...t.ml,Date.now()])}))},1200)}
+async function fixT(id){if(confirm("Is the issue fixed at site? The ticket will be closed."))await act(()=>DB.upd("tickets",id,{status:"closed"}))}
 function raise(){
  if(!S[ft.site])ft.site=S[me.site]?me.site:D[0].n;
  const o=S[ft.site].o;if(!o[ft.oem])ft.oem=Object.keys(o)[0];
@@ -103,7 +112,7 @@ function raise(){
  <label>Detail (optional)</label><textarea id="fn" rows="2" placeholder="Block / row / what you see"></textarea>
  <div style="height:14px"></div><button class="act" onclick="sub()">Submit issue</button><button class="sm" style="width:100%;margin:8px 0 0" onclick="$('modal').classList.add('hide')">Cancel</button>`}
 async function sub(){const mx=S[ft.site].o[ft.oem][ft.type=="FAR"?1:0];
- const o={site:ft.site,oem:ft.oem,type:ft.type,cat:$("fc").value,robots:Math.min(mx,Math.max(1,+$("fr").value||1)),vil:$("fv")?$("fv").value:"",note:$("fn").value,ball:"Vendor",status:"open",raised_by:me.name+" ("+me.site+")",created:Date.now()};
+ const o={site:ft.site,oem:ft.oem,type:ft.type,cat:$("fc").value,robots:Math.min(mx,Math.max(1,+$("fr").value||1)),vil:$("fv")?$("fv").value:"",note:$("fn").value,ball:"Vendor",status:"open",mail_log:"[]",raised_by:me.name+" ("+me.site+")",created:Date.now()};
  $("modal").classList.add("hide");tab="issues";await act(()=>DB.add("tickets",o))}
 function spares(){
  return `<h3 style="margin-top:0">Spare part pipeline</h3>`+P.map(p=>{const late=p.stage==3&&p.since>=10;
@@ -126,7 +135,7 @@ function master(){
  const mp=Math.max(1,...by.map(b=>b.p));
  const rg=REGS.map(g=>{const x=T.filter(t=>S[t.site].reg==g);return{g,t:D.filter(s=>s.reg==g).reduce((s,z)=>s+tot(z),0),r:x.reduce((s,t)=>s+t.robots,0),n:x.length}}).filter(z=>z.n);
  const old=T.filter(t=>t.days>=30).sort((a,b)=>b.days-a.days);
- return `<div class="kpi"><div class="r"><div class="big">${a.tk.length}</div>With vendor 7+ days</div><div class="r"><div class="big">${a.down.length}</div>Down 30+ days</div><div><div class="big">${dn}</div>Robots down (${(dn/ALL*100).toFixed(1)}% of ${ALL})</div><div class="${a.sp.length?"r":""}"><div class="big">${a.sp.length}</div>Part not delivered (10d+)</div></div>
+ return `<div class="kpi"><div class="r"><div class="big">${a.tk.length}</div>With vendor 7+ days</div><div class="r"><div class="big">${a.down.length}</div>Down 30+ days</div><div><div class="big">${dn}</div>Robots down (${(dn/ALL*100).toFixed(1)}% of ${ALL})</div><div class="${a.sp.length?"r":""}"><div class="big">${a.sp.length}</div>Mail / reminder due</div></div>
  <h3>🔴 Oldest issues, act now</h3>`+(old.length?old.map(t=>`<div class="card red"><div class="row"><div><div class="t">${t.site} · ${t.oem}</div><div class="m">${t.robots} robots · ${t.cat}</div></div><div class="big" style="color:var(--red)">${t.days}d</div></div></div>`).join(""):`<div class="m">All clear ✔</div>`)+
  `<h3>OEM comparison (down % of installed)</h3><div class="card" style="border-left-color:var(--pri)">${by.map(b=>`<div class="row"><b>${b.o}</b><span class="m">${b.r} / ${b.i} · ${b.p.toFixed(1)}% · avg ${b.d} days</span></div><div class="bar"><i style="width:${b.p/mp*100}%"></i></div>`).join("")}</div>
  <h3>Region-wise</h3><div class="card" style="border-left-color:var(--pri)">${rg.map(z=>`<div class="row"><b>${z.g}</b><span class="m">${z.r} down / ${z.t} · ${z.n} issues</span></div><div class="bar"><i style="width:${Math.min(100,z.r/z.t*400)}%"></i></div>`).join("")}</div>
@@ -134,10 +143,20 @@ function master(){
 // ===== SUPABASE: paste your Project URL and anon/publishable key =====
 const SBU="https://yuwebkcuoxxsorgamnbo.supabase.co",SBK="sb_publishable_3B0imtC1-vkOar_28RFprQ_Iq-6qN7f";
 const sb=(p,o={})=>fetch(SBU+"/rest/v1/"+p,{...o,headers:{apikey:SBK,"x-team-code":(me&&me.code)||"","Content-Type":"application/json",Prefer:"return=representation"}}).then(r=>r.ok?r.json():Promise.reject(r));
-const DB={load:async()=>({T:await sb("tickets?status=eq.open&order=created"),P:await sb("spares?order=id"),SP:await sb("spocs?order=id")}),
+const DB={load:async()=>({T:await sb("tickets?status=eq.open&order=created"),P:await sb("spares?order=id"),SP:await sb("spocs?order=id"),CT:await sb("contacts?order=id")}),
  add:(t,o)=>sb(t,{method:"POST",body:JSON.stringify(o)}),upd:(t,id,p)=>sb(t+"?id=eq."+id,{method:"PATCH",body:JSON.stringify(p)})};
+const GAP=3;
+const pj=x=>{try{return JSON.parse(x||"[]")}catch(e){return[]}};
+const lastM=t=>t.ml.length?t.ml[t.ml.length-1]:0;
+const mailDue=t=>t.ml.length==0?t.days>=1:(t.ml.length<4&&t.days>=7*t.ml.length);
+const em=(k,n)=>CT.filter(c=>c.kind==k&&(!n||c.name==n)).map(c=>c.email).filter(Boolean).join(",");
+function mailTo(t){const cn=((document.getElementById("cn"+t.id)||{}).value??t.concern??"").trim(),n=t.ml.length,sp=(SP[t.site]||[]).map(x=>x.name+" "+x.phone).join(", ")||"-",ty=t.type=="FAR"?"FAR":"L&S";
+ const cc=[em("manager"),n>=3?em("hod"):""].filter(Boolean).join(",");
+ const sub=`[T-${t.id}] ${n?"REMINDER "+n+": ":""}${t.site} - ${t.oem} ${ty} robots - ${t.cat}`;
+ const body=`Dear ${t.oem} Team,\n\n`+(n?`This is reminder ${n}. The issue below is still open (${t.days} days since it was raised). Please share the engineer visit date and the expected fix date.\n\n`:`Please arrange to resolve the issue below at the earliest and share the engineer visit date and expected fix date.\n\n`)+`Ticket: T-${t.id}\nSite: ${t.site}${t.vil?" ("+t.vil+")":""}\nRegion: ${S[t.site].reg}\nRobot type: ${ty}\nRobots affected: ${t.robots}\nIssue: ${t.cat}\nDetails: ${t.note||"-"}\nRaised on: ${new Date(+t.created).toLocaleDateString("en-GB")} (${t.days} days ago)\nSite contact: ${sp}\n\n${cn?"Message from site team:\n"+cn+"\n\n":""}Regards,\n${me.name}`;
+ location.href="mailto:"+em("oem",t.oem)+"?cc="+encodeURIComponent(cc)+"&subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body)}
 const dd=x=>Math.floor((Date.now()-new Date(x))/864e5);
 async function act(f){try{await f();await refresh()}catch(e){alert("Could not save. Check internet and try again.")}}
-async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}render()}
+async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,ml:pj(t.mail_log),days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));CT=d.CT||[];SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}if(!(document.activeElement&&document.activeElement.tagName=="TEXTAREA"))render()}
 render();refresh();setInterval(refresh,60000);
 </script></body></html>
