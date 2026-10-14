@@ -80,9 +80,10 @@ async function saveMe(){const n=$("nm").value.trim(),c=$("tc").value.trim();if(!
  try{localStorage.setItem("me",JSON.stringify(me))}catch(e){}
  $("modal").classList.add("hide");render();refresh()}
 function issues(){
- const L=T.filter(t=>!fr||S[t.site].reg==fr).sort((a,b)=>b.days-a.days);
+ const L=T.filter(t=>!fr||S[t.site].reg==fr).sort((a,b)=>so=="old"?a.created-b.created:b.created-a.created);
  return `<button class="act" onclick="raise()">+ Raise new issue</button>
  <label>Region</label><select onchange="fr=this.value;render()"><option value="">All regions</option>${REGS.map(r=>`<option ${r==fr?"selected":""}>${r}</option>`).join("")}</select>
+ <label>Sort by date raised</label><select onchange="so=this.value;render()"><option value="old" ${so=="old"?"selected":""}>Oldest first (longest open)</option><option value="new" ${so=="new"?"selected":""}>Newest first</option></select>
  <h3>Open issues (${L.length})</h3>`+L.map(card).join("")}
 const fd=d=>new Date(+d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
 function card(t){const n=t.ml.length,due=mailDue(t),nx=n==0?"Mail to vendor pending":n<4?`Reminder ${n} ${due?"due now":"in "+(7*n-t.days)+"d"}`:"All 3 reminders sent";
@@ -165,8 +166,8 @@ function newCode(id){act(()=>DB.upd("tickets",id,{otp:gen(),otp_at:Date.now(),ot
 function closedTab(){
  const f=t=>t.closed_at?Math.max(0,Math.round((t.closed_at-t.created)/864e5)):"-";
  const by=OEMS.map(o=>{const x=CL.filter(t=>t.oem==o&&t.closed_at);return{o,n:x.length,d:x.length?Math.round(x.reduce((a,t)=>a+(t.closed_at-t.created)/864e5,0)/x.length):0}});
- return `<h3 style="margin-top:0">Closed tickets (${CL.length})</h3><div class="card" style="border-left-color:var(--pri)"><div class="t">Average days to fix</div>${by.map(b=>`<div class="row"><b>${b.o}</b><span class="m">${b.n} closed${b.n?" · avg "+b.d+" days":""}</span></div>`).join("")}</div>`+
- CL.map(t=>`<div class="card"><div class="row"><div><div class="t">T-${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat} · ${t.robots} robots</div></div><div style="text-align:right"><div class="big" style="font-size:22px">${f(t)}d</div><div class="m">to fix</div></div></div>
+ return `<label>Sort by date closed</label><select onchange="sc=this.value;render()"><option value="new" ${sc=="new"?"selected":""}>Newest first</option><option value="old" ${sc=="old"?"selected":""}>Oldest first</option></select><h3>Closed tickets (${CL.length})</h3><div class="card" style="border-left-color:var(--pri)"><div class="t">Average days to fix</div>${by.map(b=>`<div class="row"><b>${b.o}</b><span class="m">${b.n} closed${b.n?" · avg "+b.d+" days":""}</span></div>`).join("")}</div>`+
+ [...CL].sort((a,b)=>sc=="new"?(b.closed_at||0)-(a.closed_at||0):(a.closed_at||0)-(b.closed_at||0)).map(t=>`<div class="card"><div class="row"><div><div class="t">T-${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat} · ${t.robots} robots</div></div><div style="text-align:right"><div class="big" style="font-size:22px">${f(t)}d</div><div class="m">to fix</div></div></div>
  <div class="m" style="margin-top:6px">Raised ${fd(t.created)} by ${esc((t.raised_by||"").split(" (")[0])} · Closed ${t.closed_at?fd(t.closed_at):"-"}</div><div class="m">Mails sent: ${pj(t.mail_log).length} · ${esc(t.closed_by||"")}</div>${t.concern?`<div class="m">Site note: ${esc(t.concern)}</div>`:""}</div>`).join("")}
 const rpc=(fn,b)=>fetch(SBU+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:SBK,"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
 const ms=r=>typeof r=="string"?r:"Something went wrong, try again";
@@ -178,7 +179,7 @@ function vendorPage(){const id=location.hash.slice(7);
  rpc("vendor_ticket",{tid:+id}).then(r=>{$("vinfo").textContent=r&&r.site?`${r.site} · ${r.oem} · ${r.cat} · ${r.robots} robots · ${r.status}`:"Ticket not found"}).catch(()=>{$("vinfo").textContent=""})}
 async function vReq(id){const n=$("vn").value.trim();if(!n){$("vn").focus();return}const r=await rpc("vendor_request_close",{tid:id,vname:n});$("vmsg").textContent=r=="ok"?"Request sent. Ask the site SPOC for the 6-digit code after they check the fix.":ms(r)}
 async function vClose(id){const r=await rpc("vendor_close",{tid:id,code:$("vc").value});$("vmsg").textContent=r=="closed"?"✔ Ticket closed. Thank you.":ms(r)}
-let mOpen=false,skip=false;
+let mOpen=false,skip=false,so="old",sc="new";
 function closeModal(){$("modal").classList.add("hide");if(mOpen){mOpen=false;skip=true;history.back()}}
 function openMail(u){const a=document.createElement("a");a.href=u;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();a.remove()}
 history.replaceState({tab:"issues"},"");
