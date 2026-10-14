@@ -52,21 +52,22 @@ const S={};D.forEach(s=>S[s.n]=s);
 const REGS=[...new Set(D.map(s=>s.reg))];
 const tot=s=>Object.values(s.o).reduce((a,v)=>a+v[0]+v[1],0);
 const ALL=D.reduce((a,s)=>a+tot(s),0);
-let T=[],P=[],OFF=false,SP={},CT=[];
+let T=[],P=[],OFF=false,SP={},CT=[],CL=[];
 let me=null,tab="issues",nid=107,fr="",ft={site:null,oem:null,type:"FAR"};
 try{me=JSON.parse(localStorage.getItem("me"))}catch(e){}
 const $=id=>document.getElementById(id);
 const sev=t=>t.days>=30||(t.days>=7&&t.ball=="Vendor")||(mailDue(t)&&t.ml.length)?"red":t.days>=7||mailDue(t)?"amb":"";
 const alerts=()=>({tk:T.filter(t=>t.days>=7&&t.ball=="Vendor"),down:T.filter(t=>t.days>=30),sp:T.filter(mailDue)});
 const siteOpts=sel=>REGS.map(r=>`<optgroup label="${r}">${D.filter(s=>s.reg==r).map(s=>`<option ${s.n==sel?"selected":""}>${s.n}</option>`).join("")}</optgroup>`).join("");
-function go(t){tab=t;render()}
+function go(t){if(t!=tab)history.pushState({tab:t},"");tab=t;render()}
 function render(){
+ if(VM()){vendorPage();return}
  if(!me||!me.code){ask();return}
  $("who").textContent=me.name+" · "+me.site;
  const a=alerts(),n=new Set([...a.tk,...a.down].map(t=>t.id)).size+a.sp.length;
  $("bell").textContent=OFF?"⚠ offline":"🔴 "+n+" alert";
- $("nav").innerHTML=[["issues","Issues"],["sites","Sites"],["master","Master"]].map(([k,l])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')">${l}</button>`).join("");
- $("main").innerHTML={issues,spares,sites,master}[tab]();
+ $("nav").innerHTML=[["issues","Issues"],["closed","Closed"],["sites","Sites"],["master","Master"]].map(([k,l])=>`<button class="${tab==k?"on":""}" onclick="go('${k}')">${l}</button>`).join("");
+ $("main").innerHTML={issues,spares,sites,master,closed:closedTab}[tab]();
 }
 function ask(){
  $("modal").classList.remove("hide");
@@ -90,8 +91,9 @@ function card(t){const n=t.ml.length,due=mailDue(t),nx=n==0?"Mail to vendor pend
  <span class="pill pb">${t.robots} robots</span><span class="pill pb">By ${(t.by||"").split(" (")[0]}</span>
  <div style="margin-top:4px"><span class="pill pg">✔ Raised · ${fd(t.created)}</span>${done}<span class="pill ${due||n>=4?"pr":"pa"}">${nx}</span></div>
  ${t.note?`<div class="m" style="margin-top:6px">${t.note}</div>`:""}
+ ${t.status=="close_requested"?`<div class="card red" style="margin:8px 0 0;background:var(--redbg)"><b>Vendor ${esc(t.vendor_name)} says it is fixed.</b> Check at site first. If it is really fixed, give them this code:<div class="big" style="letter-spacing:6px;margin:6px 0">${t.otp}</div><button class="sm" onclick="notFixed(${t.id})">Not fixed yet</button><button class="sm" onclick="newCode(${t.id})">New code</button></div>`:""}
  <textarea id="cn${t.id}" rows="2" style="margin-top:8px" placeholder="Site concern for vendor (goes in the next email)" onchange="saveC(${t.id},this.value)">${esc(t.concern)}</textarea>
- ${n<4?`<button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button>`:""}<button class="sm" onclick="fixT(${t.id})">Fixed, close ticket</button></div>`}
+ ${n<4?`<button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button>`:""}</div>`}
 const esc=x=>String(x||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 function saveC(id,v){act(()=>DB.upd("tickets",id,{concern:v}))}
 function emailT(id){const t=T.find(x=>x.id==id);mailTo(t);setTimeout(()=>{if(confirm("Did you send the mail? OK = Yes, sent"))act(()=>DB.upd("tickets",id,{mail_log:JSON.stringify([...t.ml,Date.now()])}))},1200)}
@@ -100,6 +102,7 @@ function raise(){
  if(!S[ft.site])ft.site=S[me.site]?me.site:D[0].n;
  const o=S[ft.site].o;if(!o[ft.oem])ft.oem=Object.keys(o)[0];
  const c=o[ft.oem],av={LS:c[0],FAR:c[1]};if(!av[ft.type])ft.type=av.FAR?"FAR":"LS";
+ if(!mOpen){history.pushState({tab:tab,modal:1},"");mOpen=true}
  $("modal").classList.remove("hide");
  $("mbox").innerHTML=`<h3 style="margin-top:0">New issue</h3>
  <label>Site</label><select onchange="ft.site=this.value;raise()">${siteOpts(ft.site)}</select>
@@ -110,10 +113,10 @@ function raise(){
  ${ft.site.startsWith("MSKVY")?`<label>Village / sub-site</label><input id="fv" placeholder="e.g. Palaskhel">`:""}
  <label>Photo</label><input type="file" accept="image/*" capture="environment">
  <label>Detail (optional)</label><textarea id="fn" rows="2" placeholder="Block / row / what you see"></textarea>
- <div style="height:14px"></div><button class="act" onclick="sub()">Submit issue</button><button class="sm" style="width:100%;margin:8px 0 0" onclick="$('modal').classList.add('hide')">Cancel</button>`}
+ <div style="height:14px"></div><button class="act" onclick="sub()">Submit issue</button><button class="sm" style="width:100%;margin:8px 0 0" onclick="closeModal()">Cancel</button>`}
 async function sub(){const mx=S[ft.site].o[ft.oem][ft.type=="FAR"?1:0];
  const o={site:ft.site,oem:ft.oem,type:ft.type,cat:$("fc").value,robots:Math.min(mx,Math.max(1,+$("fr").value||1)),vil:$("fv")?$("fv").value:"",note:$("fn").value,ball:"Vendor",status:"open",mail_log:"[]",raised_by:me.name+" ("+me.site+")",created:Date.now()};
- $("modal").classList.add("hide");tab="issues";await act(()=>DB.add("tickets",o))}
+ closeModal();tab="issues";await act(()=>DB.add("tickets",o))}
 function spares(){
  return `<h3 style="margin-top:0">Spare part pipeline</h3>`+P.map(p=>{const late=p.stage==3&&p.since>=10;
  return `<div class="card ${late?"red":p.since>=14?"amb":""}"><div class="row"><div><div class="t">${p.part} × ${p.qty}</div><div class="m">${p.site} · ${p.oem} · Issue #${p.tid}</div></div><div class="m">${p.since}d in this stage</div></div>
@@ -143,7 +146,7 @@ function master(){
 // ===== SUPABASE: paste your Project URL and anon/publishable key =====
 const SBU="https://yuwebkcuoxxsorgamnbo.supabase.co",SBK="sb_publishable_3B0imtC1-vkOar_28RFprQ_Iq-6qN7f";
 const sb=(p,o={})=>fetch(SBU+"/rest/v1/"+p,{...o,headers:{apikey:SBK,"x-team-code":(me&&me.code)||"","Content-Type":"application/json",Prefer:"return=representation"}}).then(r=>r.ok?r.json():Promise.reject(r));
-const DB={load:async()=>({T:await sb("tickets?status=eq.open&order=created"),P:await sb("spares?order=id"),SP:await sb("spocs?order=id"),CT:await sb("contacts?order=id")}),
+const DB={load:async()=>({T:await sb("tickets?status=neq.closed&order=created"),P:await sb("spares?order=id"),SP:await sb("spocs?order=id"),CT:await sb("contacts?order=id"),CL:await sb("tickets?status=eq.closed&order=closed_at.desc&limit=500")}),
  add:(t,o)=>sb(t,{method:"POST",body:JSON.stringify(o)}),upd:(t,id,p)=>sb(t+"?id=eq."+id,{method:"PATCH",body:JSON.stringify(p)})};
 const GAP=3;
 const pj=x=>{try{return JSON.parse(x||"[]")}catch(e){return[]}};
@@ -153,10 +156,37 @@ const em=(k,n)=>CT.filter(c=>c.kind==k&&(!n||c.name==n)).map(c=>c.email).filter(
 function mailTo(t){const cn=((document.getElementById("cn"+t.id)||{}).value??t.concern??"").trim(),n=t.ml.length,sp=(SP[t.site]||[]).map(x=>x.name+" "+x.phone).join(", ")||"-",ty=t.type=="FAR"?"FAR":"L&S";
  const cc=[em("manager"),n>=3?em("hod"):""].filter(Boolean).join(",");
  const sub=`[T-${t.id}] ${n?"REMINDER "+n+": ":""}${t.site} - ${t.oem} ${ty} robots - ${t.cat}`;
- const body=`Dear ${t.oem} Team,\n\n`+(n?`This is reminder ${n}. The issue below is still open (${t.days} days since it was raised). Please share the engineer visit date and the expected fix date.\n\n`:`Please arrange to resolve the issue below at the earliest and share the engineer visit date and expected fix date.\n\n`)+`Ticket: T-${t.id}\nSite: ${t.site}${t.vil?" ("+t.vil+")":""}\nRegion: ${S[t.site].reg}\nRobot type: ${ty}\nRobots affected: ${t.robots}\nIssue: ${t.cat}\nDetails: ${t.note||"-"}\nRaised on: ${new Date(+t.created).toLocaleDateString("en-GB")} (${t.days} days ago)\nSite contact: ${sp}\n\n${cn?"Message from site team:\n"+cn+"\n\n":""}Regards,\n${me.name}`;
- location.href="mailto:"+em("oem",t.oem)+"?cc="+encodeURIComponent(cc)+"&subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body)}
+ const body=`Dear ${t.oem} Team,\n\n`+(n?`This is reminder ${n}. The issue below is still open (${t.days} days since it was raised). Please share the engineer visit date and the expected fix date.\n\n`:`Please arrange to resolve the issue below at the earliest and share the engineer visit date and expected fix date.\n\n`)+`Ticket: T-${t.id}\nSite: ${t.site}${t.vil?" ("+t.vil+")":""}\nRegion: ${S[t.site].reg}\nRobot type: ${ty}\nRobots affected: ${t.robots}\nIssue: ${t.cat}\nDetails: ${t.note||"-"}\nRaised on: ${new Date(+t.created).toLocaleDateString("en-GB")} (${t.days} days ago)\nSite contact: ${sp}\n\n${cn?"Message from site team:\n"+cn+"\n\n":""}When the fix is complete, close the ticket here (the site team will give you a code after checking): ${location.href.split("#")[0]}#close-${t.id}\n\nRegards,\n${me.name}`;
+ openMail("mailto:"+em("oem",t.oem)+"?cc="+encodeURIComponent(cc)+"&subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body))}
+const VM=()=>/^#close-/.test(location.hash);
+const gen=()=>String(Math.floor(Math.random()*1e6)).padStart(6,"0");
+function notFixed(id){if(confirm("Not fixed at site? The ticket goes back to open."))act(()=>DB.upd("tickets",id,{status:"open",otp:null,vendor_name:null}))}
+function newCode(id){act(()=>DB.upd("tickets",id,{otp:gen(),otp_at:Date.now(),otp_tries:0}))}
+function closedTab(){
+ const f=t=>t.closed_at?Math.max(0,Math.round((t.closed_at-t.created)/864e5)):"-";
+ const by=OEMS.map(o=>{const x=CL.filter(t=>t.oem==o&&t.closed_at);return{o,n:x.length,d:x.length?Math.round(x.reduce((a,t)=>a+(t.closed_at-t.created)/864e5,0)/x.length):0}});
+ return `<h3 style="margin-top:0">Closed tickets (${CL.length})</h3><div class="card" style="border-left-color:var(--pri)"><div class="t">Average days to fix</div>${by.map(b=>`<div class="row"><b>${b.o}</b><span class="m">${b.n} closed${b.n?" · avg "+b.d+" days":""}</span></div>`).join("")}</div>`+
+ CL.map(t=>`<div class="card"><div class="row"><div><div class="t">T-${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat} · ${t.robots} robots</div></div><div style="text-align:right"><div class="big" style="font-size:22px">${f(t)}d</div><div class="m">to fix</div></div></div>
+ <div class="m" style="margin-top:6px">Raised ${fd(t.created)} by ${esc((t.raised_by||"").split(" (")[0])} · Closed ${t.closed_at?fd(t.closed_at):"-"}</div><div class="m">Mails sent: ${pj(t.mail_log).length} · ${esc(t.closed_by||"")}</div>${t.concern?`<div class="m">Site note: ${esc(t.concern)}</div>`:""}</div>`).join("")}
+const rpc=(fn,b)=>fetch(SBU+"/rest/v1/rpc/"+fn,{method:"POST",headers:{apikey:SBK,"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json());
+const ms=r=>typeof r=="string"?r:"Something went wrong, try again";
+function vendorPage(){const id=location.hash.slice(7);
+ $("nav").style.display="none";$("bell").style.display="none";$("who").textContent="Vendor ticket closure";
+ $("main").innerHTML=`<div class="card" style="border-left-color:var(--pri)"><div class="t">Ticket T-${esc(id)}</div><div class="m" id="vinfo">Loading...</div></div>
+ <h3>Step 1: The fix is done</h3><label>Your name</label><input id="vn" placeholder="Engineer name"><div style="height:10px"></div><button class="act" onclick="vReq(${+id})">Fix done, request close code</button>
+ <h3>Step 2: Enter the code from the site team</h3><input id="vc" inputmode="numeric" maxlength="6" placeholder="6-digit code"><div style="height:10px"></div><button class="act" onclick="vClose(${+id})">Close ticket</button><div id="vmsg" class="m" style="margin-top:12px;font-weight:700"></div>`;
+ rpc("vendor_ticket",{tid:+id}).then(r=>{$("vinfo").textContent=r&&r.site?`${r.site} · ${r.oem} · ${r.cat} · ${r.robots} robots · ${r.status}`:"Ticket not found"}).catch(()=>{$("vinfo").textContent=""})}
+async function vReq(id){const n=$("vn").value.trim();if(!n){$("vn").focus();return}const r=await rpc("vendor_request_close",{tid:id,vname:n});$("vmsg").textContent=r=="ok"?"Request sent. Ask the site SPOC for the 6-digit code after they check the fix.":ms(r)}
+async function vClose(id){const r=await rpc("vendor_close",{tid:id,code:$("vc").value});$("vmsg").textContent=r=="closed"?"✔ Ticket closed. Thank you.":ms(r)}
+let mOpen=false,skip=false;
+function closeModal(){$("modal").classList.add("hide");if(mOpen){mOpen=false;skip=true;history.back()}}
+function openMail(u){const a=document.createElement("a");a.href=u;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();a.remove()}
+history.replaceState({tab:"issues"},"");
+window.addEventListener("popstate",e=>{if(skip){skip=false;return}if(mOpen){mOpen=false;$("modal").classList.add("hide");render();return}if(VM()){render();return}tab=(e.state&&e.state.tab)||"issues";render();refresh()});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!VM()&&me)refresh()});
+window.addEventListener("pageshow",e=>{if(e.persisted&&!VM()&&me)refresh()});
 const dd=x=>Math.floor((Date.now()-new Date(x))/864e5);
 async function act(f){try{await f();await refresh()}catch(e){alert("Could not save. Check internet and try again.")}}
-async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,ml:pj(t.mail_log),days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));CT=d.CT||[];SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}if(!(document.activeElement&&document.activeElement.tagName=="TEXTAREA"))render()}
-render();refresh();setInterval(refresh,60000);
+async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,ml:pj(t.mail_log),days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));CT=d.CT||[];CL=d.CL||[];SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}if(!(document.activeElement&&document.activeElement.tagName=="TEXTAREA"))render()}
+render();if(!VM()){refresh();setInterval(refresh,60000)}
 </script></body></html>
