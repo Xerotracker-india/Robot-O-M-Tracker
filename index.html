@@ -83,7 +83,6 @@ function issues(){
  const L=T.filter(t=>okS(t.site)).sort((a,b)=>so=="old"?a.created-b.created:b.created-a.created);
  return `<button class="act" onclick="raise()">+ Raise new issue</button>
  ${filterBar()}
- ${mmSel()}
  <label>Sort by date raised</label><select onchange="so=this.value;render()"><option value="old" ${so=="old"?"selected":""}>Oldest first (longest open)</option><option value="new" ${so=="new"?"selected":""}>Newest first</option></select>
  <h3>Open issues (${L.length})</h3>`+L.map(card).join("")}
 const fd=d=>new Date(+d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
@@ -159,7 +158,7 @@ function mailTo(t){const cn=((document.getElementById("cn"+t.id)||{}).value??t.c
  const cc=[em("manager"),n>=3?em("hod"):""].filter(Boolean).join(",");
  const sub=`[T-${t.id}] ${n?"REMINDER "+n+": ":""}${t.site} - ${t.oem} ${ty} robots - ${t.cat}`;
  const body=`Dear ${t.oem} Team,\n\n`+(n?`This is reminder ${n}. The issue below is still open (${t.days} days since it was raised). Please share the engineer visit date and the expected fix date.\n\n`:`Please arrange to resolve the issue below at the earliest and share the engineer visit date and expected fix date.\n\n`)+`Ticket: T-${t.id}\nSite: ${t.site}${t.vil?" ("+t.vil+")":""}\nRegion: ${S[t.site].reg}\nRobot type: ${ty}\nRobots affected: ${t.robots}\nIssue: ${t.cat}\nDetails: ${t.note||"-"}\nRaised on: ${new Date(+t.created).toLocaleDateString("en-GB")} (${t.days} days ago)\nSite contact: ${sp}\n\n${cn?"Message from site team:\n"+cn+"\n\n":""}When the fix is complete, close the ticket here (the site team will give you a code after checking): ${location.href.split("#")[0]}#close-${t.id}\n\nRegards,\n${me.name}`;
- const to=em("oem",t.oem),q="subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body);if(getMM()=="web")openMail("https://outlook.office.com/mail/deeplink/compose?to="+encodeURIComponent(to)+"&cc="+encodeURIComponent(cc)+"&"+q);else openMail("mailto:"+to+"?cc="+encodeURIComponent(cc)+"&"+q)}
+ openMail("mailto:"+em("oem",t.oem)+"?cc="+encodeURIComponent(cc)+"&subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body))}
 const VM=()=>/^#close-/.test(location.hash);
 const gen=()=>String(Math.floor(Math.random()*1e6)).padStart(6,"0");
 function notFixed(id){if(confirm("Not fixed at site? The ticket goes back to open."))act(()=>DB.upd("tickets",id,{status:"open",otp:null,vendor_name:null}))}
@@ -194,9 +193,6 @@ const siteCmp=(a,b)=>ss=="rob"?tot(b)-tot(a):ss=="iss"?cnt(b.n)-cnt(a.n):a.n.loc
 function filterBar(){const sl=D.filter(s=>!fr||s.reg==fr);
  return `<div class="row" style="gap:8px"><div style="flex:1"><label>State</label><select onchange="fr=this.value;fs='';render()"><option value="">All states</option>${REGS.map(r=>`<option ${r==fr?"selected":""}>${r}</option>`).join("")}</select></div><div style="flex:1"><label>Plant</label><select onchange="fs=this.value;render()"><option value="">All plants</option>${sl.map(s=>`<option ${s.n==fs?"selected":""}>${s.n}</option>`).join("")}</select></div></div>`}
 function master(){const sv=T;T=T.filter(t=>okS(t.site));try{return master0()}finally{T=sv}}
-const getMM=()=>{try{const v=localStorage.getItem("mm");if(v)return v}catch(e){}return /Android|iPhone|iPad/i.test(navigator.userAgent)?"app":"web"};
-function setMM(v){try{localStorage.setItem("mm",v)}catch(e){}render()}
-const mmSel=()=>`<label>Open emails in</label><select onchange="setMM(this.value)"><option value="web" ${getMM()=="web"?"selected":""}>Outlook Web (in browser)</option><option value="app" ${getMM()=="app"?"selected":""}>Outlook app / default mail program</option></select>`;
 const dd=x=>Math.floor((Date.now()-new Date(x))/864e5);
 async function act(f){try{await f();await refresh()}catch(e){alert("Could not save. Check internet and try again.")}}
 async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,ml:pj(t.mail_log),days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));CT=d.CT||[];CL=d.CL||[];SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}if(!(document.activeElement&&document.activeElement.tagName=="TEXTAREA"))render()}
