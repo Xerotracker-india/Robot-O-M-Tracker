@@ -87,15 +87,15 @@ function issues(){
  <label>Sort by date raised</label><select onchange="so=this.value;render()"><option value="old" ${so=="old"?"selected":""}>Oldest first (longest open)</option><option value="new" ${so=="new"?"selected":""}>Newest first</option></select>
  <h3>Open issues (${L.length})</h3>`+L.map(card).join("")}
 const fd=d=>new Date(+d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
-function card(t){const n=t.ml.length,due=mailDue(t),nx=n==0?"Mail to vendor pending":n<4?`Reminder ${n} ${due?"due now":"in "+(7*n-t.days)+"d"}`:"All 3 reminders sent";
- const done=["Vendor mailed","Reminder 1","Reminder 2","Reminder 3"].slice(0,n).map((x,i)=>`<span class="pill pg">✔ ${x} · ${fd(t.ml[i])}</span>`).join("");
+function card(t){const n=t.ml.length,due=mailDue(t),nx=n==0?"Mail to vendor pending":`Reminder ${n} ${due?"due now":"in "+(7*(Math.floor(t.days/7)+1)-t.days)+"d"}`;
+ const done=n?`<span class="pill pg">✔ Vendor mailed · ${fd(t.ml[0])}</span>`+(n>1?`<span class="pill pg">✔ ${n-1} reminder${n>2?"s":""} · last ${fd(t.ml[n-1])}</span>`:""):"";
  return `<div class="card ${sev(t)}"><div class="row"><div><div class="t">T-${t.id} · ${t.site}${t.vil?" · "+t.vil:""}</div><div class="m">${t.type=="FAR"?"FAR":"L&S"} · ${t.oem} · ${t.cat}</div></div><div style="text-align:right"><div class="big" style="font-size:24px;color:${sev(t)=="red"?"var(--red)":"inherit"}">${t.days}d</div><div class="m">open</div></div></div>
  <span class="pill pb">${t.robots} robots</span><span class="pill pb">By ${(t.by||"").split(" (")[0]}</span>
- <div style="margin-top:4px"><span class="pill pg">✔ Raised · ${fd(t.created)}</span>${done}<span class="pill ${due||n>=4?"pr":"pa"}">${nx}</span></div>
+ <div style="margin-top:4px"><span class="pill pg">✔ Raised · ${fd(t.created)}</span>${done}<span class="pill ${due?"pr":"pa"}">${nx}</span></div>
  ${t.note?`<div class="m" style="margin-top:6px">${t.note}</div>`:""}
  ${t.status=="close_requested"?`<div class="card red" style="margin:8px 0 0;background:var(--redbg)"><b>Vendor ${esc(t.vendor_name)} says it is fixed.</b> Check at site first. If it is really fixed, give them this code:<div class="big" style="letter-spacing:6px;margin:6px 0">${t.otp}</div><button class="sm" onclick="notFixed(${t.id})">Not fixed yet</button><button class="sm" onclick="newCode(${t.id})">New code</button></div>`:""}
  <textarea id="cn${t.id}" rows="2" style="margin-top:8px" placeholder="Site concern for vendor (goes in the next email)" onchange="saveC(${t.id},this.value)">${esc(t.concern)}</textarea>
- ${n<4?`<button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button>`:""}</div>`}
+ <button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button></div>`}
 const esc=x=>String(x||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 function saveC(id,v){act(()=>DB.upd("tickets",id,{concern:v}))}
 function emailT(id){const t=T.find(x=>x.id==id);mailTo(t);setTimeout(()=>{if(confirm("Did you send the mail? OK = Yes, sent"))act(()=>DB.upd("tickets",id,{mail_log:JSON.stringify([...t.ml,Date.now()])}))},1200)}
@@ -153,7 +153,7 @@ const DB={load:async()=>({T:await sb("tickets?status=neq.closed&order=created"),
 const GAP=3;
 const pj=x=>{try{return JSON.parse(x||"[]")}catch(e){return[]}};
 const lastM=t=>t.ml.length?t.ml[t.ml.length-1]:0;
-const mailDue=t=>t.ml.length==0?t.days>=1:(t.ml.length<4&&t.days>=7*t.ml.length);
+const mailDue=t=>t.ml.length==0?t.days>=1:Math.floor(t.days/7)>Math.floor((lastM(t)-t.created)/864e5/7);
 const em=(k,n)=>CT.filter(c=>c.kind==k&&(!n||c.name==n)).map(c=>c.email).filter(Boolean).join(",");
 function mailTo(t){const cn=((document.getElementById("cn"+t.id)||{}).value??t.concern??"").trim(),n=t.ml.length,sp=(SP[t.site]||[]).map(x=>x.name+" "+x.phone).join(", ")||"-",ty=t.type=="FAR"?"FAR":"L&S";
  const cc=[em("manager"),n>=3?em("hod"):""].filter(Boolean).join(",");
