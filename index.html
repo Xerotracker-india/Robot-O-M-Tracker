@@ -83,7 +83,6 @@ function issues(){
  const L=T.filter(t=>okS(t.site)).sort((a,b)=>so=="old"?a.created-b.created:b.created-a.created);
  return `<button class="act" onclick="raise()">+ Raise new issue</button>
  ${filterBar()}
- ${mmSel()}
  <label>Sort by date raised</label><select onchange="so=this.value;render()"><option value="old" ${so=="old"?"selected":""}>Oldest first (longest open)</option><option value="new" ${so=="new"?"selected":""}>Newest first</option></select>
  <h3>Open issues (${L.length})</h3>`+L.map(card).join("")}
 const fd=d=>new Date(+d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
@@ -95,7 +94,7 @@ function card(t){const n=t.ml.length,due=mailDue(t),nx=n==0?"Mail to vendor pend
  ${t.note?`<div class="m" style="margin-top:6px">${t.note}</div>`:""}
  ${t.status=="close_requested"?`<div class="card red" style="margin:8px 0 0;background:var(--redbg)"><b>Vendor ${esc(t.vendor_name)} says it is fixed.</b> Check at site first. If it is really fixed, give them this code:<div class="big" style="letter-spacing:6px;margin:6px 0">${t.otp}</div><button class="sm" onclick="notFixed(${t.id})">Not fixed yet</button><button class="sm" onclick="newCode(${t.id})">New code</button></div>`:""}
  <textarea id="cn${t.id}" rows="2" style="margin-top:8px" placeholder="Site concern for vendor (goes in the next email)" onchange="saveC(${t.id},this.value)">${esc(t.concern)}</textarea>
- <button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button></div>`}
+ <button class="sm" onclick="emailT(${t.id})">${n==0?"Email vendor":"Send Reminder "+n}</button><button class="sm" onclick="siteClose(${t.id})">Resolved at site, close</button></div>`}
 const esc=x=>String(x||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
 function saveC(id,v){act(()=>DB.upd("tickets",id,{concern:v}))}
 function emailT(id){const t=T.find(x=>x.id==id);mailTo(t);setTimeout(()=>{if(confirm("Did you send the mail? OK = Yes, sent"))act(()=>DB.upd("tickets",id,{mail_log:JSON.stringify([...t.ml,Date.now()])}))},1200)}
@@ -194,9 +193,10 @@ const siteCmp=(a,b)=>ss=="rob"?tot(b)-tot(a):ss=="iss"?cnt(b.n)-cnt(a.n):a.n.loc
 function filterBar(){const sl=D.filter(s=>!fr||s.reg==fr);
  return `<div class="row" style="gap:8px"><div style="flex:1"><label>State</label><select onchange="fr=this.value;fs='';render()"><option value="">All states</option>${REGS.map(r=>`<option ${r==fr?"selected":""}>${r}</option>`).join("")}</select></div><div style="flex:1"><label>Plant</label><select onchange="fs=this.value;render()"><option value="">All plants</option>${sl.map(s=>`<option ${s.n==fs?"selected":""}>${s.n}</option>`).join("")}</select></div></div>`}
 function master(){const sv=T;T=T.filter(t=>okS(t.site));try{return master0()}finally{T=sv}}
-const getMM=()=>{try{const v=localStorage.getItem("mm");if(v)return v}catch(e){}return "app"};
+const getMM=()=>"app";
 function setMM(v){try{localStorage.setItem("mm",v)}catch(e){}render()}
 const mmSel=()=>`<label>Open emails in</label><select onchange="setMM(this.value)"><option value="web" ${getMM()=="web"?"selected":""}>Outlook Web (in browser)</option><option value="app" ${getMM()=="app"?"selected":""}>Outlook app / default mail program</option></select>`;
+async function siteClose(id){const n=(prompt("How was it resolved? (short note, required)")||"").trim();if(!n)return;if(!confirm("Close this ticket as resolved at site?"))return;await act(()=>DB.upd("tickets",id,{status:"closed",closed_at:Date.now(),closed_by:"Site ("+me.name+", "+me.site+"): "+n,otp:null}))}
 const dd=x=>Math.floor((Date.now()-new Date(x))/864e5);
 async function act(f){try{await f();await refresh()}catch(e){alert("Could not save. Check internet and try again.")}}
 async function refresh(){try{const d=await DB.load();T=d.T.filter(t=>t.status!="closed").map(t=>({...t,robots:+t.robots,by:t.raised_by,ml:pj(t.mail_log),days:dd(t.created)}));P=d.P.map(p=>({...p,qty:+p.qty,stage:+p.stage,since:dd(p.stage_at)}));CT=d.CT||[];CL=d.CL||[];SP={};(d.SP||[]).forEach(x=>(SP[x.site]=SP[x.site]||[]).push(x));OFF=false}catch(e){OFF=true}if(!(document.activeElement&&document.activeElement.tagName=="TEXTAREA"))render()}
